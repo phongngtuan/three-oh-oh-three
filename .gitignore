@@ -27,3 +27,11 @@
 *.i*86
 *.x86_64
 *.hex
+
+#iar project files
+*.dep
+*.ewd
+*.ewp
+*.ewt
+*.eww
+Debug/*
