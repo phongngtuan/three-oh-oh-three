@@ -3,7 +3,7 @@
 #ifndef __MOTOR_LIB_H__
 #define __MOTOR_LIB_H__
 
-#define RIGHT_ANGLE 7
+#define RIGHT_ANGLE 8
 #include <bsp.h>
 
 enum opt{

@@ -356,7 +356,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
 
     CPU_INT08U state = IDLE;
     CPU_INT08U corner_count = 0;
-    CPU_INT08U turning = 1;
+    CPU_BOOLEAN turning = true;
     CPU_INT08U bump_state = 0;
     CPU_INT08U timer_state = 0;
     CPU_INT08U distance;
@@ -390,17 +390,27 @@ static  void  AppTaskRobotControl (void  *p_arg)
         case CIRCLING:
             
             if(corner_count <= 4){//Still circling
-                if(turning==1){
+                if(turning)
+                {
                     //DEBUG
                     BSP_DisplayClear();
                     snprintf(message, 80, "Corner count:%d", corner_count);
                     BSP_DisplayStringDraw(message,10u,1u);
                     //DEBUGEND
                     corner_count++;
+                    turning = !turning;
                     postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
                 }
+                else
+                {
+                    //DEBUG
+                    BSP_DisplayClear();
+                    BSP_DisplayStringDraw("going straight",10u,1u);
+                    //DEBUGEND
+                    turning = !turning;
+                    postToMotor(STRAIGHT, motor_speed, 15, &err);
+                }
             }
-            
             break;
              
         }
