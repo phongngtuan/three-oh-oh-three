@@ -327,7 +327,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
      
      motor_dir  = 0;
      motor_speed = 80u; 
-     motor_seg = 10u;       // Tell the motors to run forward
+     motor_seg = 100u;       // Tell the motors to run forward
      msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
      OSTaskQPost(&AppTaskMotorControlTCB,
                  (CPU_INT32U *)msg_motor,
@@ -335,7 +335,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
                  (OS_OPT)OS_OPT_POST_FIFO,
                  (OS_ERR *)&err);           
      
-    msg_timer = 1000;      // Generate random timeout
+    msg_timer =  rand()%6000 + 5000;      // Generate random timeout
     OSTaskQPost(&AppTaskTimerControlTCB,
                (CPU_INT16U *)msg_timer,
                (OS_MSG_SIZE)sizeof(CPU_INT16U *),
@@ -360,11 +360,11 @@ static  void  AppTaskRobotControl (void  *p_arg)
        
        case 0: // This is motor control
                // Tell the motor control task to execute next state
-         BSP_DisplayStringDraw("receive 0",10u,1u);               
+                              
          if(rx_val != 0){            // This means it has completed the turn
            motor_dir  = 0;           // Go Straight
            motor_speed = 80u; 
-           motor_seg =15u;
+           motor_seg =50u;
          }
          else{          // This means it has completed a forward or reverse run     
                  
@@ -374,7 +374,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
           motor_seg = 15u;
                      
          }                      
-         if(state >=3){
+         if(state >= 2){
            BSP_DisplayClear();
            
            if(bump_state)
@@ -396,11 +396,9 @@ static  void  AppTaskRobotControl (void  *p_arg)
                             // Send subsequent messages to the motor task 
          break;
        case 1: //This is bump sensors
-                BSP_DisplayStringDraw("Received 1",10u,1u);               
-               //BSP_DisplayStringDraw("Bumpers detected",10u,1u);
                if(bump_state)
                  break;
-
+         
                RoboStopNow();               // Stop the motors immediately
                bump_state = 1;            // Indicate that obstacle is detected                    
                                           // and distance has not expired
@@ -460,7 +458,7 @@ static  void  AppTasksCreate (void)
                    (OS_OPT      )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
                    (OS_ERR     *)&err);
 
-    /*OSTaskCreate((OS_TCB     *)&AppTaskTimerControlTCB,
+    OSTaskCreate((OS_TCB     *)&AppTaskTimerControlTCB,
                    (CPU_CHAR   *)"Timer Control Task",
                    (OS_TASK_PTR ) AppTaskTimerControl,
                    (void       *) 0,
@@ -472,7 +470,7 @@ static  void  AppTasksCreate (void)
                    (OS_TICK     ) 0u,
                    (void       *) 0,
                    (OS_OPT      )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
-                   (OS_ERR     *)&err);*/
+                   (OS_ERR     *)&err);    
     
     OSTaskCreate((OS_TCB     *)&AppTaskInputMonitorTCB,
                    (CPU_CHAR   *)"Input Monitor Task",
