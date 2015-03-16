@@ -33,6 +33,8 @@ static  void  AppTaskTimerControl (void);
 static void AppTaskLedControl (void *p_arg);
 void  AppTaskInputMonitor (void  *p_arg);
 static  void  AppTasksCreate (void);
+void postToMotor(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_seg, OS_ERR* err);
+void postToTimer(CPU_INT16U msg_timer, OS_ERR* err);
 
 int main()
 {
@@ -335,131 +337,58 @@ static void AppTaskLedControl(void *p_arg)
 }
 static  void  AppTaskRobotControl (void  *p_arg)
 {
-     OS_ERR  err;
-     OS_MSG_SIZE size;
-     CPU_TS ts;
-     
-     CPU_INT16U msg_rx;
-     CPU_INT08U rx_src;
-     CPU_INT08U rx_val;                       //Variables to receive message
-     
-     CPU_INT32U msg_motor;
-     CPU_INT08U motor_dir;
-     CPU_INT16U motor_seg;
-     CPU_INT08U motor_speed;         //Variables to post messages to motor task        
-     
-     CPU_INT16U msg_timer;             //variables to post messages to the timer
+    OS_ERR  err;
+    OS_MSG_SIZE size;
+    CPU_TS ts;
 
-     CPU_INT08U state = 0;
-     CPU_INT08U bump_state = 0;
-     CPU_INT08U timer_state = 0;
-     CPU_INT08U distance;
-     CPU_INT08U last_distance;
-     char message[80];
+    CPU_INT16U msg_rx;
+    CPU_INT08U rx_src;
+    CPU_INT08U rx_val;                       //Variables to receive message
+
+    CPU_INT08U motor_speed;
+    CPU_INT08U motor_dir;
+    CPU_INT16U motor_seg;    
+
+    CPU_INT08U state = IDLE;
+    CPU_INT08U bump_state = 0;
+    CPU_INT08U timer_state = 0;
+    CPU_INT08U distance;
+    CPU_INT08U last_distance;
+
+    char message[80];
      
-     srand(123456);
-     
-     motor_dir  = 0;
-     motor_speed = 80u; 
-     motor_seg = 100u;       // Tell the motors to run forward
-     msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
-     OSTaskQPost(&AppTaskMotorControlTCB,
-                 (CPU_INT32U *)msg_motor,
-                 (OS_MSG_SIZE)sizeof(CPU_INT32U *),
-                 (OS_OPT)OS_OPT_POST_FIFO,
-                 (OS_ERR *)&err);           
-     
-    msg_timer =  rand()%6000 + 5000;      // Generate random timeout
-    OSTaskQPost(&AppTaskTimerControlTCB,
-               (CPU_INT16U *)msg_timer,
-               (OS_MSG_SIZE)sizeof(CPU_INT16U *),
-               (OS_OPT)OS_OPT_POST_FIFO,
-               (OS_ERR *)&err);          
-                            // Tell the timer control task to start running
-     
-     while(1){
-      
-       msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
+    srand(123456);
+    while(1){
+        switch(state){
+        case IDLE:
+            BSP_DisplayStringDraw("PHONG NGUYEN",10u,1u);
+            motor_dir  = 0;
+            motor_speed = 80u; 
+            motor_seg = 100u;       // Tell the motors to run forward
+            postToMotor(motor_dir, motor_speed, motor_seg, &err);
+            state = FINDING;
+            break;
+        case FINDING:
+            BSP_DisplayStringDraw("DEBUG FINDING",10u,1u);
+            switch(rx_src){
+            case BUMP_SRC:
+                distance = RoboStopNow();
+                //DEBUG
+                snprintf(message, 80, "Distance is %d", distance);
+                BSP_DisplayStringDraw(message,10u,1u);
+                //DEBUGEND
+                state = CIRCLING;
+            }
+             
+        }
+        msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
                                        (OS_OPT)OS_OPT_PEND_BLOCKING,
                                        (OS_MSG_SIZE *)&size,
                                        (CPU_TS *)&ts,
                                        (OS_ERR *)&err);
-       rx_val = msg_rx;
-       rx_src = (msg_rx >> 8u);     // Wait for incoming messages
-       
-       switch(rx_src){     // Resolve Source
-       
-       case MOTOR_SRC: // This is motor control
-               // Tell the motor control task to execute next state
-       
-         if(rx_val != 0){            // This means it has completed the turn
-           motor_dir  = 0;           // Go Straight
-           motor_speed = 80u; 
-           last_distance = motor_seg; //save distance just finished
-           motor_seg =50;
-         }
-         else{          // This means it has completed a forward or reverse run     
-                 
-          motor_dir = 3;     // Turn Right 
-                
-          motor_speed = 50u; 
-          motor_seg = 15u;
-                     
-         }                      
-         if(state >= 2){
-           BSP_DisplayClear();
-           
-           if(bump_state){
-             //BSP_DisplayStringDraw("Bumpers",10u,1u);
-             snprintf(message, 80, "Distance is %d", distance); //DEBUG
-             BSP_DisplayStringDraw(message,10u,1u);    //DEBUG
-           }
-           else if(timer_state)
-             BSP_DisplayStringDraw("Timer",10u,1u);
-           else{
-             BSP_DisplayStringDraw("Distance",10u,1u);
-           }
-           while(1);
-         }
-         state++;
-         
-         msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
-         OSTaskQPost(&AppTaskMotorControlTCB,
-                   (CPU_INT32U *)msg_motor,
-                   (OS_MSG_SIZE)sizeof(CPU_INT32U *),
-                   (OS_OPT)OS_OPT_POST_FIFO,
-                   (OS_ERR *)&err);
-                            // Send subsequent messages to the motor task 
-         break;
-       case BUMP_SRC: //This is bump sensors
-               if(bump_state)
-                 break;
-         
-               distance = RoboStopNow();               // Stop the motors immediately
-               snprintf(message, 80, "Distance is %d", distance); //DEBUG
-               BSP_DisplayStringDraw(message,10u,1u);    //DEBUG    
-               bump_state = 1;            // Indicate that obstacle is detected                    
-                                          // and distance has not expired
-                                          // nor did the timer expire   
-         break;
-       case TIMER_SRC: //This is timer expiry
-               if(!state){
-                    distance = RoboStopNow();         // Stop the robot
-                    timer_state = 1;       // Indicate that timer has expired                    
-               }                           // and distance has not expired
-                                          // nor did any obstacle being detected
-               break;
-       default:
-                BSP_DisplayClear();
-                BSP_DisplayStringDraw("ERROR 3: HALTED",10u,0u);
-                BSP_DisplayStringDraw("DO RESET",30u,1u);
-                while(1);
-         break;
-       }
-       
-              
-     }
-
+        rx_val = msg_rx;
+        rx_src = (msg_rx >> 8u);
+    }
 }
 
 static  void  AppTasksCreate (void)
@@ -536,4 +465,23 @@ static  void  AppTasksCreate (void)
                    (void       *) 0,
                    (OS_OPT      )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
                    (OS_ERR     *)&err);
+}
+
+void postToMotor(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_seg, OS_ERR* err)
+{
+    CPU_INT32U msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
+    OSTaskQPost(&AppTaskMotorControlTCB,
+             (CPU_INT32U *)msg_motor,
+             (OS_MSG_SIZE)sizeof(CPU_INT32U *),
+             (OS_OPT)OS_OPT_POST_FIFO,
+             (OS_ERR *)err);
+}
+
+void postToTimer(CPU_INT16U msg_timer, OS_ERR* err)
+{
+    OSTaskQPost(&AppTaskTimerControlTCB,
+               (CPU_INT16U *)msg_timer,
+               (OS_MSG_SIZE)sizeof(CPU_INT16U *),
+               (OS_OPT)OS_OPT_POST_FIFO,
+               (OS_ERR *)err);
 }
