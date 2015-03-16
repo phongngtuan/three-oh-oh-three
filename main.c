@@ -6,7 +6,11 @@
 #define MOTOR_SRC 0
 #define BUMP_SRC 1
 #define TIMER_SRC 2
-#define LED_TIMER_SRC 3
+
+#define IDLE 0
+#define FINDING 1
+#define CIRCLING 2
+#define RETURN 3
 
 static  OS_TCB       AppTaskStartTCB;
 static  OS_TCB       AppTaskRobotControlTCB;
@@ -162,7 +166,7 @@ static  void  AppTaskMotorControl (void  *p_arg)
                 while(1);
             break;
           }
-          tx_src = 0;
+          tx_src = MOTOR_SRC;
           
           // Tell the control task that job has been done
           msg_tx = ((tx_src <<8u)|(tx_val));
@@ -206,7 +210,7 @@ static  void  AppTaskTimerControl(void)
        OSTimeDlyHMSM(0u, 0u, sec, msec, OS_OPT_TIME_HMSM_STRICT, &err);
        // Wait until timeout 
 
-       tx_src = 2;
+       tx_src = TIMER_SRC;
        tx_val = 1;
        
        // After timeout inform the control task that time is over
@@ -291,7 +295,7 @@ static  void  AppTaskInputMonitor (void  *p_arg)
 
         if (ucDelta & 0x0Cu) { /* Check if any bump sensor switched state.   */
                     
-            tx_src = 1;
+          tx_src = BUMP_SRC;
                         
             if((ucDelta & 0x08) && (ucDelta & 0x04))
               tx_val = 1;
@@ -349,12 +353,15 @@ static  void  AppTaskRobotControl (void  *p_arg)
      CPU_INT08U state = 0;
      CPU_INT08U bump_state = 0;
      CPU_INT08U timer_state = 0;
+     CPU_INT08U distance;
+     CPU_INT08U last_distance;
+     char message[80];
      
      srand(123456);
      
      motor_dir  = 0;
      motor_speed = 80u; 
-     motor_seg = 15u;       // Tell the motors to run forward
+     motor_seg = 100u;       // Tell the motors to run forward
      msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
      OSTaskQPost(&AppTaskMotorControlTCB,
                  (CPU_INT32U *)msg_motor,
@@ -371,7 +378,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
                             // Tell the timer control task to start running
      
      while(1){
-   
+      
        msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
                                        (OS_OPT)OS_OPT_PEND_BLOCKING,
                                        (OS_MSG_SIZE *)&size,
@@ -380,16 +387,15 @@ static  void  AppTaskRobotControl (void  *p_arg)
        rx_val = msg_rx;
        rx_src = (msg_rx >> 8u);     // Wait for incoming messages
        
-       BSP_DisplayClear();
-       
        switch(rx_src){     // Resolve Source
        
-       case 0: // This is motor control
+       case MOTOR_SRC: // This is motor control
                // Tell the motor control task to execute next state
-                              
+       
          if(rx_val != 0){            // This means it has completed the turn
            motor_dir  = 0;           // Go Straight
            motor_speed = 80u; 
+           last_distance = motor_seg; //save distance just finished
            motor_seg =50;
          }
          else{          // This means it has completed a forward or reverse run     
@@ -403,12 +409,16 @@ static  void  AppTaskRobotControl (void  *p_arg)
          if(state >= 2){
            BSP_DisplayClear();
            
-           if(bump_state)
-             BSP_DisplayStringDraw("Bumpers",10u,1u);
+           if(bump_state){
+             //BSP_DisplayStringDraw("Bumpers",10u,1u);
+             snprintf(message, 80, "Distance is %d", distance); //DEBUG
+             BSP_DisplayStringDraw(message,10u,1u);    //DEBUG
+           }
            else if(timer_state)
              BSP_DisplayStringDraw("Timer",10u,1u);
-           else
+           else{
              BSP_DisplayStringDraw("Distance",10u,1u);
+           }
            while(1);
          }
          state++;
@@ -421,18 +431,20 @@ static  void  AppTaskRobotControl (void  *p_arg)
                    (OS_ERR *)&err);
                             // Send subsequent messages to the motor task 
          break;
-       case 1: //This is bump sensors
+       case BUMP_SRC: //This is bump sensors
                if(bump_state)
                  break;
          
-               RoboStopNow();               // Stop the motors immediately
+               distance = RoboStopNow();               // Stop the motors immediately
+               snprintf(message, 80, "Distance is %d", distance); //DEBUG
+               BSP_DisplayStringDraw(message,10u,1u);    //DEBUG    
                bump_state = 1;            // Indicate that obstacle is detected                    
                                           // and distance has not expired
                                           // nor did the timer expire   
          break;
-       case 2: //This is timer expiry
+       case TIMER_SRC: //This is timer expiry
                if(!state){
-                    RoboStopNow();         // Stop the robot
+                    distance = RoboStopNow();         // Stop the robot
                     timer_state = 1;       // Indicate that timer has expired                    
                }                           // and distance has not expired
                                           // nor did any obstacle being detected

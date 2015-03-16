@@ -41,7 +41,8 @@ void motors_init()
 /* *****************************************************************************
 *		THE WHEEL SENSOR ISR                *
 ***************************************************************************** */
-
+static CPU_INT08U CountL = 0;
+static CPU_INT08U CountR = 0;
 void IntWheelSensor()
 {
         OS_ERR err;
@@ -49,8 +50,7 @@ void IntWheelSensor()
 	CPU_INT32U         ulStatusR_A;
 	CPU_INT32U         ulStatusL_A;
 
-	static CPU_INT08U CountL = 0;
-	static CPU_INT08U CountR = 0;
+	
 
 	static CPU_INT08U data = 0;
 
@@ -247,9 +247,10 @@ void RoboTurn(tSide dir, CPU_INT16U seg, opt_t option,CPU_INT16U speed)
 	return;
 }
 
-void RoboStopNow(void)
+int RoboStopNow(void)
 {
 
 	Left_tgt = 0;
-	Right_tgt = 0;	
+	Right_tgt = 0;
+        return (CountL+CountR)/2;
 }
