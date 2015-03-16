@@ -1,24 +1,32 @@
 #include <includes.h>
 #include "motor_lib.h"
+#include "LED.h"
 
 #define BSP_PushButtonGetStatus(a) (0)
+#define MOTOR_SRC 0
+#define BUMP_SRC 1
+#define TIMER_SRC 2
+#define LED_TIMER_SRC 3
 
 static  OS_TCB       AppTaskStartTCB;
 static  OS_TCB       AppTaskRobotControlTCB;
 static  OS_TCB       AppTaskMotorControlTCB;
 static  OS_TCB       AppTaskTimerControlTCB;
 static  OS_TCB       AppTaskInputMonitorTCB;
+static  OS_TCB       AppTaskLedControlTCB;
 
 static  CPU_STK      AppTaskStartStk[APP_TASK_START_STK_SIZE];
 static  CPU_STK      AppTaskRobotControlStk[APP_TASK_ROBOT_CONTROL_STK_SIZE];
 static  CPU_STK      AppTaskMotorControlStk[APP_TASK_MOTOR_CONTROL_STK_SIZE];
 static  CPU_STK      AppTaskTimerControlStk[APP_TASK_TIMER_CONTROL_STK_SIZE];
 static  CPU_STK      AppTaskInputMonitorStk[APP_TASK_INPUT_MONITOR_STK_SIZE];
+static  CPU_STK      AppTaskLedControlStk[APP_TASK_LED_CONTROL_STK_SIZE];
 
 static  void  AppTaskStart        (void  *p_arg);
 static  void  AppTaskRobotControl (void  *p_arg);
 static  void  AppTaskMotorControl (void  *p_arg);
 static  void  AppTaskTimerControl (void);
+static void AppTaskLedControl (void *p_arg);
 void  AppTaskInputMonitor (void  *p_arg);
 static  void  AppTasksCreate (void);
 
@@ -81,7 +89,7 @@ static  void  AppTaskStart (void  *p_arg)
     CPU_IntDisMeasMaxCurReset();
     
     motors_init();
-
+    LEDsInit();
     AppTasksCreate();
     
     while (DEF_ON) {                                            /* Task body, always written as an infinite loop.       */
@@ -302,6 +310,25 @@ static  void  AppTaskInputMonitor (void  *p_arg)
     }
 }
 
+
+static void AppTaskLedControl(void *p_arg)
+{
+    OS_ERR err;
+    OS_MSG_SIZE size;
+    CPU_TS ts;
+    
+    int led_en = 0;
+    int interval = 1000;
+    LEDsInit();
+    while(1){
+        if(led_en)
+          LED_On(0);
+        else
+          LED_Off(0);
+        led_en = ~led_en;
+        OSTimeDlyHMSM(0u, 0u, 1u, 0u, OS_OPT_TIME_HMSM_STRICT, &err);
+    }
+}
 static  void  AppTaskRobotControl (void  *p_arg)
 {
      OS_ERR  err;
@@ -327,7 +354,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
      
      motor_dir  = 0;
      motor_speed = 80u; 
-     motor_seg = 100u;       // Tell the motors to run forward
+     motor_seg = 15u;       // Tell the motors to run forward
      msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg));
      OSTaskQPost(&AppTaskMotorControlTCB,
                  (CPU_INT32U *)msg_motor,
@@ -342,10 +369,9 @@ static  void  AppTaskRobotControl (void  *p_arg)
                (OS_OPT)OS_OPT_POST_FIFO,
                (OS_ERR *)&err);          
                             // Tell the timer control task to start running
-    
+     
      while(1){
-     
-     
+   
        msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
                                        (OS_OPT)OS_OPT_PEND_BLOCKING,
                                        (OS_MSG_SIZE *)&size,
@@ -364,7 +390,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
          if(rx_val != 0){            // This means it has completed the turn
            motor_dir  = 0;           // Go Straight
            motor_speed = 80u; 
-           motor_seg =50u;
+           motor_seg =50;
          }
          else{          // This means it has completed a forward or reverse run     
                  
@@ -484,6 +510,18 @@ static  void  AppTasksCreate (void)
                    (OS_TICK     ) 0u,
                    (void       *) 0,
                    (OS_OPT      )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
-                   (OS_ERR     *)&err);  
-    
+                   (OS_ERR     *)&err);
+    OSTaskCreate((OS_TCB     *)&AppTaskLedControlTCB,
+                   (CPU_CHAR   *)"LED Control Task",
+                   (OS_TASK_PTR ) AppTaskLedControl,
+                   (void       *) 0,
+                   (OS_PRIO     ) APP_TASK_LED_CONTROL_PRIO,
+                   (CPU_STK    *)&AppTaskLedControlStk[0],
+                   (CPU_STK_SIZE) APP_TASK_LED_CONTROL_STK_SIZE / 10u,
+                   (CPU_STK_SIZE) APP_TASK_LED_CONTROL_STK_SIZE,
+                   (OS_MSG_QTY  ) 10u,
+                   (OS_TICK     ) 0u,
+                   (void       *) 0,
+                   (OS_OPT      )(OS_OPT_TASK_STK_CHK | OS_OPT_TASK_STK_CLR),
+                   (OS_ERR     *)&err);
 }

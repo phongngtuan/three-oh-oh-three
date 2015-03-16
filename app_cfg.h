@@ -53,6 +53,7 @@
 #define  APP_TASK_ROBOT_CONTROL_PRIO                       2u
 #define  APP_TASK_MOTOR_CONTROL_PRIO                       3u
 #define  APP_TASK_TIMER_CONTROL_PRIO                       4u
+#define  APP_TASK_LED_CONTROL_PRIO                         6u
   
 /*
 *********************************************************************************************************
@@ -69,9 +70,10 @@
 #define  APP_TASK_RIGHT_MOTOR_DRIVE_STK_SIZE            128u
 #define  APP_TASK_CONTROL_STK_SIZE                      128u
 #define  APP_TASK_INPUT_MONITOR_STK_SIZE                128u
-#define  APP_TASK_ROBOT_CONTROL_STK_SIZE                 128u
-#define  APP_TASK_MOTOR_CONTROL_STK_SIZE                 128u
-#define  APP_TASK_TIMER_CONTROL_STK_SIZE                 128u
+#define  APP_TASK_ROBOT_CONTROL_STK_SIZE                128u
+#define  APP_TASK_MOTOR_CONTROL_STK_SIZE                128u
+#define  APP_TASK_TIMER_CONTROL_STK_SIZE                128u
+#define  APP_TASK_LED_CONTROL_STK_SIZE                  128u
 /*
 *********************************************************************************************************
 *                                           uC/LIB CONFIGURATION
