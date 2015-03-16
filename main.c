@@ -388,8 +388,41 @@ static  void  AppTaskRobotControl (void  *p_arg)
                 break;
             }
         case CIRCLING:
-            
-            if(corner_count <= 4){//Still circling
+            if(corner_count == 0)
+            {
+                //Turning left ~ Taking the first turning
+                //DEBUG
+                    BSP_DisplayStringDraw("first corner",10u,1u);
+                    //DEBUGEND
+                postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
+                corner_count++;
+                turning = false;
+            }
+            else if(corner_count <= 5)
+            {//Still circling
+                if(turning)
+                {
+                    //DEBUG
+                    BSP_DisplayClear();
+                    snprintf(message, 80, "Corner count:%d", corner_count);
+                    BSP_DisplayStringDraw(message,10u,1u);
+                    //DEBUGEND
+                    corner_count++;
+                    turning = !turning;
+                    postToMotor(RIGHT, motor_speed, RIGHT_ANGLE, &err);
+                }
+                else
+                {
+                    //DEBUG
+                    BSP_DisplayClear();
+                    BSP_DisplayStringDraw("going straight",10u,1u);
+                    //DEBUGEND
+                    turning = !turning;
+                    postToMotor(STRAIGHT, motor_speed, 15, &err);
+                }
+            }
+            else if (corner_count <=6)
+            {//Finish the 4th corner. Comeback to center of obstacle
                 if(turning)
                 {
                     //DEBUG
@@ -408,7 +441,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
                     BSP_DisplayStringDraw("going straight",10u,1u);
                     //DEBUGEND
                     turning = !turning;
-                    postToMotor(STRAIGHT, motor_speed, 15, &err);
+                    postToMotor(STRAIGHT, motor_speed, 7, &err);
                 }
             }
             break;
