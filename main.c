@@ -12,6 +12,11 @@
 #define CIRCLING 2
 #define RETURN 3
 
+#define STRAIGHT 0
+#define BACK 1
+#define LEFT 2
+#define RIGHT 3
+
 static  OS_TCB       AppTaskStartTCB;
 static  OS_TCB       AppTaskRobotControlTCB;
 static  OS_TCB       AppTaskMotorControlTCB;
@@ -350,6 +355,8 @@ static  void  AppTaskRobotControl (void  *p_arg)
     CPU_INT16U motor_seg;    
 
     CPU_INT08U state = IDLE;
+    CPU_INT08U corner_count = 0;
+    CPU_INT08U turning = 1;
     CPU_INT08U bump_state = 0;
     CPU_INT08U timer_state = 0;
     CPU_INT08U distance;
@@ -362,7 +369,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
         switch(state){
         case IDLE:
             BSP_DisplayStringDraw("PHONG NGUYEN",10u,1u);
-            motor_dir  = 0;
+            motor_dir  = STRAIGHT;
             motor_speed = 80u; 
             motor_seg = 100u;       // Tell the motors to run forward
             postToMotor(motor_dir, motor_speed, motor_seg, &err);
@@ -378,7 +385,23 @@ static  void  AppTaskRobotControl (void  *p_arg)
                 BSP_DisplayStringDraw(message,10u,1u);
                 //DEBUGEND
                 state = CIRCLING;
+                break;
             }
+        case CIRCLING:
+            
+            if(corner_count <= 4){//Still circling
+                if(turning==1){
+                    //DEBUG
+                    BSP_DisplayClear();
+                    snprintf(message, 80, "Corner count:%d", corner_count);
+                    BSP_DisplayStringDraw(message,10u,1u);
+                    //DEBUGEND
+                    corner_count++;
+                    postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
+                }
+            }
+            
+            break;
              
         }
         msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
