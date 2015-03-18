@@ -11,6 +11,7 @@
 #define FINDING 1
 #define CIRCLING 2
 #define RETURN 3
+#define STOP 4
 
 #define STRAIGHT 0
 #define BACK 1
@@ -304,7 +305,7 @@ static void AppTaskLedControl(void *p_arg)
     CPU_TS ts;
     
     int led_en = 0;
-    int interval = 300;
+    CPU_INT08U interval = 500;
     LEDsInit();
     while(1){
         if(led_en)
@@ -312,7 +313,7 @@ static void AppTaskLedControl(void *p_arg)
         else
           LED_Off(0);
         led_en = ~led_en;
-        OSTimeDlyHMSM(0u, 0u, 1u, 0u, OS_OPT_TIME_HMSM_STRICT, &err);
+        OSTimeDlyHMSM(0u, 0u, 0u, interval, OS_OPT_TIME_HMSM_STRICT, &err);
     }
 }
 static  void  AppTaskRobotControl (void  *p_arg)
@@ -338,7 +339,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
     CPU_INT08U last_distance;
     CPU_INT08U count_debug =0;
     char message[80];
-     
+    OSTaskSuspend(&AppTaskLedControlTCB, &err);
     srand(123456);
     while(1){
         msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
@@ -380,13 +381,18 @@ static  void  AppTaskRobotControl (void  *p_arg)
             }
             break;
         case CIRCLING:
+            OSTaskResume(&AppTaskLedControlTCB, &err);
             postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE-1, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE-1, &err);
             postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
-            state = IDLE;
+            state = STOP;
+            break;
+        case STOP:
+            OSTaskSuspend(&AppTaskLedControlTCB, &err);
+            break;
         }        
     }
 }
