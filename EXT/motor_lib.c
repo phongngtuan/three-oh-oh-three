@@ -193,6 +193,7 @@ void RoboTurn(tSide dir, CPU_INT16U seg, opt_t option,CPU_INT16U speed)
 	switch(dir)
 	{
 	case LEFT_SIDE :
+                Right_tgt--;
                 BSP_MotorDir(RIGHT_SIDE,FORWARD);
 		if(option == COUNTER_TURN){                                                    // Is counter rotation is enables ie. both wheels will move
 			BSP_MotorDir(LEFT_SIDE,REVERSE);
@@ -201,6 +202,7 @@ void RoboTurn(tSide dir, CPU_INT16U seg, opt_t option,CPU_INT16U speed)
 		BSP_MotorRun(RIGHT_SIDE);
 		break;
 	case RIGHT_SIDE:
+                Left_tgt--;
                 BSP_MotorDir(LEFT_SIDE,FORWARD);
 		if(option == COUNTER_TURN){
 			BSP_MotorDir(RIGHT_SIDE,REVERSE);
