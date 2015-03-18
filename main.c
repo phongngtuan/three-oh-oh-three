@@ -45,7 +45,9 @@ static void AppTaskLedControl (void *p_arg);
 void  AppTaskInputMonitor (void  *p_arg);
 static  void  AppTasksCreate (void);
 void postToMotor(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_seg, OS_ERR* err);
+void synchronousMove(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_seg, CPU_TS* ts, OS_ERR* err);
 void postToTimer(CPU_INT16U msg_timer, OS_ERR* err);
+
 
 int main()
 {
@@ -129,7 +131,7 @@ static  void  AppTaskMotorControl (void  *p_arg)
      CPU_INT08U motor_dir;
      CPU_INT16U motor_seg;
      CPU_INT08U motor_speed;
-     
+     CPU_INT08U sync;
      
      CPU_INT16U msg_tx;
      CPU_INT08U tx_src;
@@ -150,7 +152,7 @@ static  void  AppTaskMotorControl (void  *p_arg)
        motor_seg = msg_rx;
        motor_speed = (msg_rx >> 16u);
        motor_dir = (msg_rx >> 24u);
-       
+       sync = msg_rx >> 31u;
        
           state = motor_dir;
           
@@ -387,7 +389,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE-1, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE, &err);
             postToMotor(RIGHT, motor_speed, RIGHT_ANGLE-1, &err);
-            postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
+            synchronousMove(LEFT, motor_speed, RIGHT_ANGLE, &ts, &err);
             state = STOP;
             break;
         case STOP:
@@ -481,6 +483,20 @@ void postToMotor(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_
              (OS_MSG_SIZE)sizeof(CPU_INT32U *),
              (OS_OPT)OS_OPT_POST_FIFO,
              (OS_ERR *)err);
+}
+
+void synchronousMove(CPU_INT08U motor_dir ,CPU_INT08U motor_speed, CPU_INT16U motor_seg, CPU_TS* ts, OS_ERR* err)
+{
+    CPU_INT32U msg_motor = ((motor_dir << 24u)|(motor_speed << 16u)|(motor_seg)|0x1<<31);
+    OSTaskQPost(&AppTaskMotorControlTCB,
+             (CPU_INT32U *)msg_motor,
+             (OS_MSG_SIZE)sizeof(CPU_INT32U *),
+             (OS_OPT)OS_OPT_POST_FIFO,
+             (OS_ERR *)err);
+    OSTaskSemPend(0,
+                  OS_OPT_PEND_BLOCKING,
+                  ts,
+                  err);
 }
 
 void postToTimer(CPU_INT16U msg_timer, OS_ERR* err)
