@@ -2,9 +2,9 @@
 #include "motor_lib.h"
 #include "LED.h"
 
-#define BSP_PushButtonGetStatus(a) (0)
+//#define BSP_PushButtonGetStatus(a) (0)
 #define MOTOR_SRC 0
-#define BUMP_SRC 1
+#define MONITOR_SRC 1
 #define TIMER_SRC 2
 
 #define IDLE 0
@@ -17,6 +17,11 @@
 #define LEFT 2
 #define RIGHT 3
 
+#define SW1 1
+#define SW2 2
+#define BUMPL 1
+#define BUMPR 2
+#define MAXIMUM 20
 static  OS_TCB       AppTaskStartTCB;
 static  OS_TCB       AppTaskRobotControlTCB;
 static  OS_TCB       AppTaskMotorControlTCB;
@@ -98,7 +103,7 @@ static  void  AppTaskStart (void  *p_arg)
 #endif
 
     CPU_IntDisMeasMaxCurReset();
-    
+    BSP_PushButtonsInit();
     motors_init();
     LEDsInit();
     AppTasksCreate();
@@ -247,22 +252,18 @@ static  void  AppTaskInputMonitor (void  *p_arg)
     //     1 - Left  Push Button
     //     2 - Right Bump Sensor
     //     3 - Left  Bump Sensor
-    CPU_INT08U  ucSwitches;
     
-     CPU_INT08U  ucDelta;
-    
-    // The vertical counter used to debounce the switches.  The
-    // bit positions are the same as g_ucPushButtons.
-    CPU_INT08U  ucSwitchesClockA;
-    CPU_INT08U  ucSwitchesClockB;
-
-
    (void)&p_arg;
-
-       /* Initialize the variables  */
-    ucSwitches       = 0x0Fu;
-    ucSwitchesClockA =    0u;
-    ucSwitchesClockB =    0u;
+    int i;
+    CPU_INT08U input[4];
+    CPU_INT08U counter[4];
+    CPU_INT08U state[4];
+    
+    for(i=0; i<4; i++){
+        input[i]=0;
+        counter[i]=0;
+        state[i]=0;
+    }
     
     while (DEF_ON) {
       /* Delay for 5 milliseconds.    */
@@ -271,53 +272,27 @@ static  void  AppTaskInputMonitor (void  *p_arg)
                       &err);
 
        /* Read the state of the switches. */
-        ucData =  BSP_PushButtonGetStatus(1u) |        /*Right Push Button */
-                 (BSP_PushButtonGetStatus(2u) << 1u) | /*Left  Push Button */
-                 (BSP_BumpSensorGetStatus(1u) << 2u) | /*Right Bump Sensor*/
-                 (BSP_BumpSensorGetStatus(2u) << 3u);  /*Left  Bump Sensor */
-                                                                
-   /* Determine the switches at a different state than ... */
-        ucDelta = ucData ^ ucSwitches;                         
-   /* ... the debounced state.                             */
-
-        ucSwitchesClockA ^=  ucSwitchesClockB; 
-   /* Increment the clocks by one.                         */
-        ucSwitchesClockB  = ~ucSwitchesClockB;
-
-        ucSwitchesClockA &= ucDelta;                           
- /* Reset the clocks corresponding to switches that ...  */
-
-        ucSwitchesClockB &= ucDelta;                            
-/* ... have not changed state.                          */
-
-                                                               
- /* Get the new debounced switch state.                  */
-
-        ucSwitches &=    ucSwitchesClockA | ucSwitchesClockB;
-        ucSwitches |= (~(ucSwitchesClockA | ucSwitchesClockB)) & ucData;
-
-        ucDelta ^= ucSwitchesClockA | ucSwitchesClockB;         
-
-/* Determine switches that changed debounced state.     */
-
-        if (ucDelta & 0x0Cu) { /* Check if any bump sensor switched state.   */
-                    
-          tx_src = BUMP_SRC;
-                        
-            if((ucDelta & 0x08) && (ucDelta & 0x04))
-              tx_val = 1;
-            else if (ucDelta & 0x08)         //Left one is pressed 
-              tx_val = 2;
-            else if (ucDelta & 0x04)        //Right one is pressed 
-              tx_val = 3;
-
-            msg_tx = ((tx_src << 8u)|(tx_val));
-            OSTaskQPost(&AppTaskRobotControlTCB,
+        input[0] = BSP_PushButtonGetStatus(SW1); //SW1 push button
+        input[1] = BSP_PushButtonGetStatus(SW2); //SW2 push button
+        input[2] = BSP_BumpSensorGetStatus(BUMPL); //Left bump sensor
+        input[3] = BSP_BumpSensorGetStatus(BUMPR); //Right bump sensor
+        
+        for(i=0; i<4; i++){
+            if(input[i]!=state[i])
+                counter[i]=0;
+            else if(counter[i] < MAXIMUM)
+                counter[i]++;
+            if(counter[i] >= MAXIMUM)
+            {
+                counter[i] = 0;
+                msg_tx = ((MONITOR_SRC << 8u)|(i));
+                OSTaskQPost(&AppTaskRobotControlTCB,
                         (CPU_INT16U *)msg_tx,
                         (OS_MSG_SIZE)sizeof(CPU_INT16U *),
                         (OS_OPT)OS_OPT_POST_FIFO,
                         (OS_ERR *)&err);
-        }
+            }
+        }//end_for
     }
 }
 
@@ -361,39 +336,56 @@ static  void  AppTaskRobotControl (void  *p_arg)
     CPU_INT08U timer_state = 0;
     CPU_INT08U distance;
     CPU_INT08U last_distance;
-
+    CPU_INT08U count_debug =0;
     char message[80];
      
     srand(123456);
     while(1){
+        msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
+                                       (OS_OPT)OS_OPT_PEND_BLOCKING,
+                                       (OS_MSG_SIZE *)&size,
+                                       (CPU_TS *)&ts,
+                                       (OS_ERR *)&err);
+        rx_val = msg_rx & 0xff;
+        rx_src = (msg_rx >> 8u);
+        count_debug++;
         switch(state){
         case IDLE:
-            BSP_DisplayStringDraw("PHONG NGUYEN",10u,1u);
-            motor_dir  = STRAIGHT;
-            motor_speed = 80u; 
-            motor_seg = 100u;       // Tell the motors to run forward
-            postToMotor(motor_dir, motor_speed, motor_seg, &err);
-            state = FINDING;
+            switch(rx_src){
+            case MONITOR_SRC:
+                if(rx_val == 1){
+                    BSP_DisplayClear();
+                    BSP_DisplayStringDraw("IDLE",10u,1u);
+                    motor_dir  = STRAIGHT;
+                    motor_speed = 80u; 
+                    motor_seg = 100u;       // Tell the motors to run forward
+                    postToMotor(motor_dir, motor_speed, motor_seg, &err);
+                    state = FINDING;
+                }
+            }
             break;
         case FINDING:
-            BSP_DisplayStringDraw("DEBUG FINDING",10u,1u);
+            BSP_DisplayClear();
+            BSP_DisplayStringDraw("PHONG NGUYEN",10u,1u);
             switch(rx_src){
-            case BUMP_SRC:
+            case MONITOR_SRC:
                 distance = RoboStopNow();
                 //DEBUG
-                snprintf(message, 80, "Distance is %d", distance);
+                BSP_DisplayClear();
+                snprintf(message, 80, "distance is %d", distance);
                 BSP_DisplayStringDraw(message,10u,1u);
                 //DEBUGEND
                 state = CIRCLING;
                 break;
             }
+            break;
         case CIRCLING:
             if(corner_count == 0)
             {
                 //Turning left ~ Taking the first turning
                 //DEBUG
-                    BSP_DisplayStringDraw("first corner",10u,1u);
-                    //DEBUGEND
+                BSP_DisplayStringDraw("first corner",10u,0u);
+                //DEBUGEND
                 postToMotor(LEFT, motor_speed, RIGHT_ANGLE, &err);
                 corner_count++;
                 turning = false;
@@ -405,7 +397,7 @@ static  void  AppTaskRobotControl (void  *p_arg)
                     //DEBUG
                     BSP_DisplayClear();
                     snprintf(message, 80, "Corner count:%d", corner_count);
-                    BSP_DisplayStringDraw(message,10u,1u);
+                    BSP_DisplayStringDraw(message,10u,0u);
                     //DEBUGEND
                     corner_count++;
                     turning = !turning;
@@ -415,13 +407,13 @@ static  void  AppTaskRobotControl (void  *p_arg)
                 {
                     //DEBUG
                     BSP_DisplayClear();
-                    BSP_DisplayStringDraw("going straight",10u,1u);
+                    BSP_DisplayStringDraw("going straight",10u,0u);
                     //DEBUGEND
                     turning = !turning;
                     postToMotor(STRAIGHT, motor_speed, 15, &err);
                 }
             }
-            else if (corner_count <=6)
+            else if (corner_count <=5)
             {//Finish the 4th corner. Comeback to center of obstacle
                 if(turning)
                 {
@@ -444,16 +436,12 @@ static  void  AppTaskRobotControl (void  *p_arg)
                     postToMotor(STRAIGHT, motor_speed, 7, &err);
                 }
             }
+            else
+            {
+                state = IDLE;
+            }
             break;
-             
-        }
-        msg_rx = (CPU_INT16U)OSTaskQPend((OS_TICK)0,  
-                                       (OS_OPT)OS_OPT_PEND_BLOCKING,
-                                       (OS_MSG_SIZE *)&size,
-                                       (CPU_TS *)&ts,
-                                       (OS_ERR *)&err);
-        rx_val = msg_rx;
-        rx_src = (msg_rx >> 8u);
+        }        
     }
 }
 

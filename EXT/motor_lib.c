@@ -187,8 +187,8 @@ void RoboTurn(tSide dir, CPU_INT16U seg, opt_t option,CPU_INT16U speed)
 	BSP_MotorStop(LEFT_SIDE);
 	BSP_MotorStop(RIGHT_SIDE);
 
-        BSP_MotorSpeed(LEFT_SIDE, speed <<8u);
-	BSP_MotorSpeed(RIGHT_SIDE,speed <<8u);
+        BSP_MotorSpeed(LEFT_SIDE, speed <<7u);
+	BSP_MotorSpeed(RIGHT_SIDE,speed <<7u);
 
 	switch(dir)
 	{
